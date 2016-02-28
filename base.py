@@ -50,6 +50,7 @@ if __name__ == '__main__':
   # script -qq -> CRITICAL
   # script -qqq -> no logging at all
   loglevel = logging.WARNING + 10*args.quiet - 10*args.verbose
+  # Set 'max'/'min' levels for logging
   if loglevel > 50:
       loglevel = 50
   elif loglevel < 10:
