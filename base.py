@@ -18,7 +18,13 @@ def main(args, loglevel):
 # Standard boilerplate to call the main() function to begin
 # the program.
 if __name__ == '__main__':
+
     parser = argparse.ArgumentParser(
+        description="Does a thing to some stuff.",
+        epilog=""
+    )
+    # TODO Specify your real parameters here.
+    parser.add_argument(
         "argument",
         help="pass ARG to the program",
         metavar="ARG"
