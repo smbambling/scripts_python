@@ -13,6 +13,23 @@ Be aware that there are 2 types of keys and secrets
 Get a key and secret for the production server
 
 You can get/create keys here https://developer.godaddy.com/keys/
+
+Note: If no value entry is given for a record it will obtain
+the external/public entry from ipinfo.io to be used
+Example YAML Config:
+---
+domains:
+  domain1.com
+    key: thisisafakekeyentry
+    secret: thisisafakesecretentry
+    records:
+      - name: www
+        type: A
+        ttl: 3600
+      - name: blog
+        type: A
+        value: 192.136.136.136
+        ttl: 600
 '''
 
 # Import Standard Modules
