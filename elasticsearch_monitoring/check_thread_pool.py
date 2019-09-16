@@ -29,7 +29,7 @@ except ImportError:
 def main(args, loglevel):
     logging.basicConfig(format="%(levelname)s: %(message)s", level=loglevel)
 
-    uri_path = "/_nodes/_local/stats/breaker"
+    uri_path = "/_nodes/_local/stats/thread_pool"
     uri_query = "?pretty"
 
     result = es_query_results(user=args.es_user,
@@ -86,10 +86,10 @@ Healthy'.format(**locals()))
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(
-        description="Checks if any of the ElasticSearch circuit breakers \
-                     have been tripped",
+        description="Does a thing to some stuff.",
         epilog=""
     )
+    # TODO Specify your real parameters here.
     parser.add_argument(
         "--es_host",
         type=str,

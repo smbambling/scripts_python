@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 '''
-Checks if any of the ElasticSearch circuit breakers have been tripped
+Checks the ElasticSearch's Disk usage watermark
 '''
 
 # Import Standard Modules
@@ -17,20 +17,12 @@ except ImportError:
     sys.exit(3)
 
 
-try:
-    from prettytable import PrettyTable
-except ImportError:
-    print "Please install prettytable:"
-    print "$ sudo pip install prettytable"
-    sys.exit(3)
-
-
 # Gather our code in a main() function
 def main(args, loglevel):
     logging.basicConfig(format="%(levelname)s: %(message)s", level=loglevel)
 
-    uri_path = "/_nodes/_local/stats/breaker"
-    uri_query = "?pretty"
+    uri_path = "/_cat/allocation/%s" % args.es_host
+    uri_query = "?format=json"
 
     result = es_query_results(user=args.es_user,
                               passwd=args.es_passwd,
@@ -39,45 +31,22 @@ def main(args, loglevel):
                               path=uri_path,
                               query=uri_query)
     values = json.loads(result)
-    keys = values['nodes'].keys()
-    tripped_breakers = {}
-    healthy_breakers = {}
-    count_total_breakers = len(values['nodes'][keys[0]]['breakers'])
-    for breaker in values['nodes'][keys[0]]['breakers']:
-        breaker_val = values['nodes'][keys[0]]['breakers'][breaker]
-        if int(breaker_val['tripped']) != 0:
-            tripped_breakers[breaker] = {}
-            tripped_breakers[breaker]['limit_size'] = breaker_val['limit_size']
-            tripped_breakers[breaker]['estimated_size'] = breaker_val['estimated_size']
-        else:
-            healthy_breakers[breaker] = {}
-            healthy_breakers[breaker]['limit_size'] = breaker_val['limit_size']
-            healthy_breakers[breaker]['estimated_size'] = breaker_val['estimated_size']
-    if tripped_breakers:
-        count_tripped_breakers = len(tripped_breakers)
-        print('CRITICAL: {count_tripped_breakers}/{count_total_breakers} \
-Tripped'.format(**locals()))
-        t = PrettyTable(['Breaker', 'Limit Size', 'Estimated Size'])
-        for breaker in tripped_breakers:
-            t.add_row([
-                breaker,
-                tripped_breakers[breaker]['limit_size'],
-                tripped_breakers[breaker]['estimated_size']
-            ])
-        print(t)
-        exit(2)
-    else:
-        count_healthy_breakers = len(healthy_breakers)
-        print('OK: {count_healthy_breakers}/{count_total_breakers} \
-Healthy'.format(**locals()))
-        t = PrettyTable(['Breaker', 'Limit Size', 'Estimated Size'])
-        for breaker in healthy_breakers:
-            t.add_row([
-                breaker,
-                healthy_breakers[breaker]['limit_size'],
-                healthy_breakers[breaker]['estimated_size']
-            ])
-        print(t)
+    disk_usage = int(values[0]['disk.percent'])
+    if disk_usage > args.flood_watermark:
+        print("CRITICAL: Disk Usage {disk_usage}% \
+Elasticsearch is enforcing a read-only index block on every index \
+that has one or more shards allocated for this node").format(**locals())
+        sys.exit(2)
+    elif disk_usage > args.high_watermark:
+        print("CRITICAL: Disk Usage {disk_usage}% \
+Elasticsearch will attempt to relocate shards \
+away from this node").format(**locals())
+    elif disk_usage > args.low_watermark:
+        print("WARNING: Disk Usage {disk_usage}% \
+Elasticsearch will not allocate shards to this node").format(**locals())
+        sys.exit(1)
+    elif disk_usage < args.low_watermark:
+        print("OK: Disk Usage {disk_usage}%").format(**locals())
         sys.exit(0)
 
 
@@ -86,8 +55,7 @@ Healthy'.format(**locals()))
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(
-        description="Checks if any of the ElasticSearch circuit breakers \
-                     have been tripped",
+        description="Checks the ElasticSearch's Disk usage watermark",
         epilog=""
     )
     parser.add_argument(
@@ -119,6 +87,30 @@ if __name__ == '__main__':
         required=True,
         help="ElasticSearch Password",
         metavar="es_passwd"
+    )
+    parser.add_argument(
+        "--low_watermark",
+        type=int,
+        required=False,
+        help="Low watermark disk usage threshold",
+        metavar="low_watermark",
+        default=85
+    )
+    parser.add_argument(
+        "--high_watermark",
+        type=int,
+        required=False,
+        help="High watermark disk usage threshold",
+        metavar="high_watermark",
+        default=90
+    )
+    parser.add_argument(
+        "--flood_watermark",
+        type=int,
+        required=False,
+        help="Flood watermark disk usage threshold",
+        metavar="flood_watermark",
+        default=95
     )
     loglevel_group = parser.add_mutually_exclusive_group(required=False)
     loglevel_group.add_argument(

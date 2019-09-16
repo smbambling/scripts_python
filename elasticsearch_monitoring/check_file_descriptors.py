@@ -51,10 +51,9 @@ def main(args, loglevel):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(
-        description="Does a thing to some stuff.",
+        description="Check the ElasticSearch file descriptor usage",
         epilog=""
     )
-    # TODO Specify your real parameters here.
     parser.add_argument(
         "--es_host",
         type=str,

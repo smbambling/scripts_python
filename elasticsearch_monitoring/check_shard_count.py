@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 '''
-Checks if any of the ElasticSearch circuit breakers have been tripped
+Checks the ElasticSearch's Shard usage
 '''
 
 # Import Standard Modules
@@ -17,20 +17,12 @@ except ImportError:
     sys.exit(3)
 
 
-try:
-    from prettytable import PrettyTable
-except ImportError:
-    print "Please install prettytable:"
-    print "$ sudo pip install prettytable"
-    sys.exit(3)
-
-
 # Gather our code in a main() function
 def main(args, loglevel):
     logging.basicConfig(format="%(levelname)s: %(message)s", level=loglevel)
 
-    uri_path = "/_nodes/_local/stats/breaker"
-    uri_query = "?pretty"
+    uri_path = "/_cat/allocation/%s" % args.es_host
+    uri_query = "?format=json"
 
     result = es_query_results(user=args.es_user,
                               passwd=args.es_passwd,
@@ -39,45 +31,19 @@ def main(args, loglevel):
                               path=uri_path,
                               query=uri_query)
     values = json.loads(result)
-    keys = values['nodes'].keys()
-    tripped_breakers = {}
-    healthy_breakers = {}
-    count_total_breakers = len(values['nodes'][keys[0]]['breakers'])
-    for breaker in values['nodes'][keys[0]]['breakers']:
-        breaker_val = values['nodes'][keys[0]]['breakers'][breaker]
-        if int(breaker_val['tripped']) != 0:
-            tripped_breakers[breaker] = {}
-            tripped_breakers[breaker]['limit_size'] = breaker_val['limit_size']
-            tripped_breakers[breaker]['estimated_size'] = breaker_val['estimated_size']
-        else:
-            healthy_breakers[breaker] = {}
-            healthy_breakers[breaker]['limit_size'] = breaker_val['limit_size']
-            healthy_breakers[breaker]['estimated_size'] = breaker_val['estimated_size']
-    if tripped_breakers:
-        count_tripped_breakers = len(tripped_breakers)
-        print('CRITICAL: {count_tripped_breakers}/{count_total_breakers} \
-Tripped'.format(**locals()))
-        t = PrettyTable(['Breaker', 'Limit Size', 'Estimated Size'])
-        for breaker in tripped_breakers:
-            t.add_row([
-                breaker,
-                tripped_breakers[breaker]['limit_size'],
-                tripped_breakers[breaker]['estimated_size']
-            ])
-        print(t)
-        exit(2)
-    else:
-        count_healthy_breakers = len(healthy_breakers)
-        print('OK: {count_healthy_breakers}/{count_total_breakers} \
-Healthy'.format(**locals()))
-        t = PrettyTable(['Breaker', 'Limit Size', 'Estimated Size'])
-        for breaker in healthy_breakers:
-            t.add_row([
-                breaker,
-                healthy_breakers[breaker]['limit_size'],
-                healthy_breakers[breaker]['estimated_size']
-            ])
-        print(t)
+    shard_count = int(values[0]['shards'])
+    shard_usage = int((100 * shard_count / args.shard_max))
+    if shard_usage > args.shard_critical:
+        print("CRITICAL: Shard Usage {shard_usage}% \
+({shard_count}/{args.shard_max})").format(**locals())
+        sys.exit(2)
+    elif shard_usage > args.shard_warning:
+        print("WARNING: Shard Usage {shard_usage}% \
+({shard_count}/{args.shard_max})").format(**locals())
+        sys.exit(1)
+    elif shard_usage < args.shard_warning:
+        print("OK: Shard Usage {shard_usage}% \
+({shard_count}/{args.shard_max})").format(**locals())
         sys.exit(0)
 
 
@@ -86,8 +52,7 @@ Healthy'.format(**locals()))
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(
-        description="Checks if any of the ElasticSearch circuit breakers \
-                     have been tripped",
+        description="Checks the ElasticSearch's Shard usage",
         epilog=""
     )
     parser.add_argument(
@@ -119,6 +84,30 @@ if __name__ == '__main__':
         required=True,
         help="ElasticSearch Password",
         metavar="es_passwd"
+    )
+    parser.add_argument(
+        "--shard_max",
+        type=int,
+        required=False,
+        help="Max shard count per node",
+        metavar="shard_max",
+        default=300
+    )
+    parser.add_argument(
+        "--shard_warning",
+        type=int,
+        required=False,
+        help="Shard percentage warning threshold",
+        metavar="shard_warning",
+        default=80
+    )
+    parser.add_argument(
+        "--shard_critical",
+        type=int,
+        required=False,
+        help="Shard percentage critical threshold",
+        metavar="shard_critical",
+        default=80
     )
     loglevel_group = parser.add_mutually_exclusive_group(required=False)
     loglevel_group.add_argument(

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 '''
-Checks if any of the ElasticSearch circuit breakers have been tripped
+Checks if any of the ElasticSearch circuit pools have been rejected
 '''
 
 # Import Standard Modules
@@ -29,7 +29,7 @@ except ImportError:
 def main(args, loglevel):
     logging.basicConfig(format="%(levelname)s: %(message)s", level=loglevel)
 
-    uri_path = "/_nodes/_local/stats/breaker"
+    uri_path = "/_nodes/_local/stats/thread_pool"
     uri_query = "?pretty"
 
     result = es_query_results(user=args.es_user,
@@ -40,42 +40,46 @@ def main(args, loglevel):
                               query=uri_query)
     values = json.loads(result)
     keys = values['nodes'].keys()
-    tripped_breakers = {}
-    healthy_breakers = {}
-    count_total_breakers = len(values['nodes'][keys[0]]['breakers'])
-    for breaker in values['nodes'][keys[0]]['breakers']:
-        breaker_val = values['nodes'][keys[0]]['breakers'][breaker]
-        if int(breaker_val['tripped']) != 0:
-            tripped_breakers[breaker] = {}
-            tripped_breakers[breaker]['limit_size'] = breaker_val['limit_size']
-            tripped_breakers[breaker]['estimated_size'] = breaker_val['estimated_size']
+    rejected_pools = {}
+    healthy_pools = {}
+    count_total_pools = len(values['nodes'][keys[0]]['thread_pool'])
+    for pool in values['nodes'][keys[0]]['thread_pool']:
+        pool_val = values['nodes'][keys[0]]['thread_pool'][pool]
+        if int(pool_val['rejected']) != 0:
+            rejected_pools[pool] = {}
+            rejected_pools[pool]['active'] = pool_val['active']
+            rejected_pools[pool]['queue'] = pool_val['queue']
+            rejected_pools[pool]['rejected'] = pool_val['rejected']
         else:
-            healthy_breakers[breaker] = {}
-            healthy_breakers[breaker]['limit_size'] = breaker_val['limit_size']
-            healthy_breakers[breaker]['estimated_size'] = breaker_val['estimated_size']
-    if tripped_breakers:
-        count_tripped_breakers = len(tripped_breakers)
-        print('CRITICAL: {count_tripped_breakers}/{count_total_breakers} \
+            healthy_pools[pool] = {}
+            healthy_pools[pool]['active'] = pool_val['active']
+            healthy_pools[pool]['queue'] = pool_val['queue']
+            healthy_pools[pool]['rejected'] = pool_val['rejected']
+    if rejected_pools:
+        count_rejected_pools = len(rejected_pools)
+        print('CRITICAL: {count_rejected_pools}/{count_total_pools} \
 Tripped'.format(**locals()))
-        t = PrettyTable(['Breaker', 'Limit Size', 'Estimated Size'])
-        for breaker in tripped_breakers:
+        t = PrettyTable(['Pool', 'Active', 'Queue', 'Rejected'])
+        for pool in rejected_pools:
             t.add_row([
-                breaker,
-                tripped_breakers[breaker]['limit_size'],
-                tripped_breakers[breaker]['estimated_size']
+                pool,
+                rejected_pools[pool]['active'],
+                rejected_pools[pool]['queue'],
+                rejected_pools[pool]['rejected']
             ])
         print(t)
         exit(2)
     else:
-        count_healthy_breakers = len(healthy_breakers)
-        print('OK: {count_healthy_breakers}/{count_total_breakers} \
+        count_healthy_pools = len(healthy_pools)
+        print('OK: {count_healthy_pools}/{count_total_pools} \
 Healthy'.format(**locals()))
-        t = PrettyTable(['Breaker', 'Limit Size', 'Estimated Size'])
-        for breaker in healthy_breakers:
+        t = PrettyTable(['Pool', 'Active', 'Queue', 'Rejected'])
+        for pool in healthy_pools:
             t.add_row([
-                breaker,
-                healthy_breakers[breaker]['limit_size'],
-                healthy_breakers[breaker]['estimated_size']
+                pool,
+                healthy_pools[pool]['active'],
+                healthy_pools[pool]['queue'],
+                healthy_pools[pool]['rejected']
             ])
         print(t)
         sys.exit(0)
@@ -86,8 +90,7 @@ Healthy'.format(**locals()))
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(
-        description="Checks if any of the ElasticSearch circuit breakers \
-                     have been tripped",
+        description="Checks if any of the ElasticSearch circuit pools have been rejected",
         epilog=""
     )
     parser.add_argument(
